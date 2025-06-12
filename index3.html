@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Datos del Sensor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f8f9fa;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: #fff;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #007bff;
+      color: white;
+    }
+
+    #resumen {
+      font-weight: bold;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    #analisis {
+      margin-top: 30px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      line-height: 1.6;
+    }
+
+    #analisis h3 {
+      color: #343a40;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 5px;
+      margin-bottom: 15px;
+    }
+
+    #analisis strong {
+      color: #007bff;
+      display: block;
+      margin-top: 15px;
+      font-size: 1.1em;
+    }
+
+    #analisis ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    #analisis li {
+      background-color: #f1f3f5;
+      margin: 6px 0;
+      padding: 8px 12px;
+      border-radius: 6px;
+      position: relative;
+    }
+
+    #analisis li::before {
+      content: "•";
+      color: #007bff;
+      font-weight: bold;
+      display: inline-block;
+      width: 1em;
+      margin-left: -1em;
+    }
+
+    #analisis p {
+      margin: 10px 0;
+      background: #e9f5ff;
+      padding: 10px;
+      border-left: 5px solid #007bff;
+      border-radius: 6px;
+    }
+
+    canvas {
+      margin-top: 40px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>📈 Visualización de Datos del Sensor</h1>
+
+  <div id="resumen"></div>
+  <div id="tabla"></div>
+  <div id="analisis"></div>
+
+  <canvas id="graficoTempHum" width="400" height="200"></canvas>
+  <canvas id="graficoBomba" width="400" height="200"></canvas>
+  <canvas id="graficoEstres" width="400" height="200"></canvas>
+
+  <script>
+    const urlLambda = 'https://h3w5krtcztgvcixivg6m5mp7ym0quwhz.lambda-url.us-east-2.on.aws/';
+
+    async function actualizarTabla() {
+      document.getElementById('resumen').textContent = 'Actualizando...';
+      document.getElementById('tabla').textContent = 'Cargando...';
+      document.getElementById('analisis').textContent = '';
+
+      try {
+        const res = await fetch(urlLambda);
+        const data = await res.json();
+
+        if (!Array.isArray(data)) {
+          document.getElementById('tabla').textContent = 'Error: datos no válidos.';
+          return;
+        }
+
+        data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        const ultimaLectura = data[0];
+        const horaUltima = new Date(ultimaLectura.timestamp).getHours();
+        const tempUltima = ultimaLectura.lm35.toFixed(2);
+
+        const total = data.length;
+        const promedioLM35 = (data.reduce((sum, d) => sum + d.lm35, 0) / total).toFixed(2);
+        document.getElementById('resumen').innerHTML =
+          `<strong>Total de registros:</strong> ${total}
+           &nbsp;|&nbsp;
+           <strong>Promedio LM35:</strong> ${promedioLM35} °C
+           &nbsp;|&nbsp;
+           <strong>Temp. Última (${horaUltima}:00):</strong> ${tempUltima} °C`;
+
+        const ultimos10 = data.slice(0, 10);
+        let tablaHTML = `<table><thead><tr>
+                          <th>ID</th>
+                          <th>Fecha</th>
+                          <th>LM35 (°C)</th>
+                          <th>DHT Temp (°C)</th>
+                          <th>DHT Hum (%)</th>
+                          <th>Luz (lx)</th>
+                          <th>Humedad Suelo (%)</th>
+                          <th>Bomba</th>
+                        </tr></thead><tbody>`;
+
+        ultimos10.forEach(r => {
+          tablaHTML += `<tr>
+                          <td>${r.id}</td>
+                          <td>${new Date(r.timestamp).toLocaleString()}</td>
+                          <td>${r.lm35}</td>
+                          <td>${r.dht_temp}</td>
+                          <td>${r.dht_hum}</td>
+                          <td>${r.luz}</td>
+                          <td>${r.humedad_suelo}</td>
+                          <td>${r.bomba ? 'Encendido' : 'Apagado'}</td>
+                        </tr>`;
+        });
+        tablaHTML += `</tbody></table>`;
+        document.getElementById('tabla').innerHTML = tablaHTML;
+
+        realizarAnalisis(data);
+
+      } catch (error) {
+        console.error('Error al obtener datos:', error);
+        document.getElementById('tabla').textContent = 'No se pudieron cargar los datos.';
+        document.getElementById('resumen').textContent = 'Error al actualizar.';
+      }
+    }
+
+    function realizarAnalisis(data) {
+      const analisis = [];
+      const porHora = {};
+      const porPunto = {};
+      const bombaPorDia = {};
+      const alertas = [];
+      const estresPorHora = {};
+
+      data.forEach(d => {
+        const fecha = new Date(d.timestamp);
+        const hora = fecha.getHours();
+        const dia = fecha.toISOString().slice(0, 10);
+        const punto = d.punto || "Sin punto";
+
+        porHora[hora] = porHora[hora] || [];
+        porHora[hora].push(d);
+
+        porPunto[punto] = porPunto[punto] || [];
+        porPunto[punto].push(d);
+
+        bombaPorDia[dia] = bombaPorDia[dia] || 0;
+        if (d.bomba) bombaPorDia[dia]++;
+
+        if (d.lm35 > 40) {
+          alertas.push(`⚠️ Alta temperatura (${d.lm35} °C) en punto ${punto} a las ${fecha.toLocaleString()}`);
+        }
+        if (d.humedad_suelo < 40) {
+          alertas.push(`⚠️ Baja humedad del suelo (${d.humedad_suelo}%) en punto ${punto} a las ${fecha.toLocaleString()}`);
+        }
+
+        estresPorHora[hora] = estresPorHora[hora] || 0;
+        if (d.lm35 > 40 || d.humedad_suelo < 40) estresPorHora[hora]++;
+      });
+
+      const media = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+      const desviacion = arr => {
+        const m = media(arr);
+        return Math.sqrt(media(arr.map(x => (x - m) ** 2)));
+      };
+
+      analisis.push(`<h3>📊 Análisis de Datos</h3>`);
+
+      if (alertas.length) {
+        analisis.push(`<strong>🚨 Alertas críticas:</strong><ul>`);
+        alertas.forEach(a => analisis.push(`<li>${a}</li>`));
+        analisis.push(`</ul>`);
+      } else {
+        analisis.push(`<p>✅ No se detectaron valores críticos.</p>`);
+      }
+
+      analisis.push(`<strong>🌞 Promedio de luz por hora:</strong><ul>`);
+      for (let h in porHora) {
+        analisis.push(`<li>${h}:00 → ${media(porHora[h].map(d => d.luz)).toFixed(2)} lx</li>`);
+      }
+      analisis.push(`</ul>`);
+
+      analisis.push(`<strong>📌 Promedios y desviaciones por punto:</strong><ul>`);
+      for (let p in porPunto) {
+        const arrLM35 = porPunto[p].map(d => d.lm35);
+        analisis.push(`<li><strong>${p}</strong>: LM35 ${media(arrLM35).toFixed(2)}±${desviacion(arrLM35).toFixed(2)} °C</li>`);
+      }
+      analisis.push(`</ul>`);
+
+      analisis.push(`<strong>💦 Historial de riego por día:</strong><ul>`);
+      for (let d in bombaPorDia) {
+        const r = bombaPorDia[d];
+        const estado = r > 3 ? "⚠️ Posible sobre-riego" : "✅ OK";
+        analisis.push(`<li>${d}: ${r} activaciones (${estado})</li>`);
+      }
+      analisis.push(`</ul>`);
+
+      analisis.push(`<strong>📅 Horas con más estrés:</strong><ul>`);
+      Object.entries(estresPorHora)
+        .sort((a,b) => b[1]-a[1])
+        .forEach(([h,c]) => {
+          analisis.push(`<li>${h}:00 → ${c} críticas ${c>2?'⚠️':'✅'}</li>`);
+        });
+      analisis.push(`</ul>`);
+
+      const puntoSeco = Object.entries(porPunto).reduce((a,b) =>
+        media(a[1].map(d=>d.humedad_suelo)) < media(b[1].map(d=>d.humedad_suelo)) ? a : b
+      );
+      const puntoLuz = Object.entries(porPunto).reduce((a,b) =>
+        media(a[1].map(d=>d.luz)) > media(b[1].map(d=>d.luz)) ? a : b
+      );
+      analisis.push(`<p>💧 Punto que más riego requiere: <strong>${puntoSeco[0]}</strong></p>`);
+      analisis.push(`<p>☀️ Punto con mayor luz: <strong>${puntoLuz[0]}</strong></p>`);
+
+      document.getElementById('analisis').innerHTML = analisis.join('');
+    }
+
+    actualizarTabla();
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Riego Automático</title>
+  <link rel="stylesheet" href="estilos.css">
+</head>
+
+<body>
+  
+  <nav>
+    <ul class="menu">
+      <li><a href="#">Inicio</a></li>
+      <li><a href="#graficas">Gráficas</a></li>
+      <li><a href="#analisis">Análisis</a></li>
+      <li><a href="#recomendaciones">Recomendaciones</a></li>
+      <li><a href="sobre-nosotros.html">Sobre Nosotros</a></li>
+    </ul>
+  </nav>
+
+  <h1>📈 Panel de Control del Riego Inteligente</h1>
+
+  <div class="contenedor-body" id="tabla"></div>
+  <div class="contenedor-body" id="resumen"></div>
+
+  <h2>Gráficas de Datos</h2>
+  <div class="contenedor-body" id="graficas">
+    <canvas id="graficoTempHum" width="400" height="200"></canvas>
+    <canvas id="graficoPorPunto" width="400" height="200"></canvas>
+    <canvas id="graficoBomba" width="400" height="200"></canvas>
+    <canvas id="graficoEstres" width="400" height="200"></canvas>
+    <canvas id="graficoDoughnut" width="400" height="200"></canvas>
+    <canvas id="graficoPie" width="400" height="200"></canvas>
+  </div>
+
+  <div class="contenedor-body" id="analisis"></div>
+  <div class="contenedor-body" id="recomendaciones"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="script.js"></script>
+  <script src="graficos.js"></script>
+</body>
+
+</html>
