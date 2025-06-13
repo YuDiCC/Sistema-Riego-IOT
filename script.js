@@ -76,7 +76,7 @@ async function actualizarTabla() {
             </div>
             <div>Estado de la Bomba 
               <img src="img/${estadoBomba ? 'on.webp' : 'off.webp'}" style="width: 70px;">
-              <p>${estadoBomba ? 'Encendida' : 'Apagada'}</p>
+              <p>Estuvo ${estadoBomba ? 'Encendida' : 'Apagada'}</p>
             </div>
           </div>
         </div>`;
